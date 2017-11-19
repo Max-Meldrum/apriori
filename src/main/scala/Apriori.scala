@@ -5,20 +5,28 @@ import util.control.Breaks._
 
 
 object Apriori extends App {
+
   type ItemSet = Set[String]
+  case class Item(set: ItemSet, support: Int)
   type Transaction = List[ItemSet]
+  type FrequentItemSets = List[Item]
+  type AssociationRule = (ItemSet, ItemSet, Double)
 
   val data = "data/T10I4D100K.dat"
   val dataTwo = "data/smaller.dat"
-  run(data, 0.01)
+  val slides = "data/slidesexample.dat"
+  val support = 0.4
+  val confidence = 0.7
 
-  case class Item(set: ItemSet, support: Int)
+  run(slides, support, confidence)
 
-  def run(file: String, support: Double): Unit = {
-    getItemSet(data) match {
+  def run(file: String, support: Double, confidence: Double): Unit = {
+    getItemSet(file) match {
       case Success(set) => {
-        val frequentItems = time(getFrequentItems(set, support))
+        val frequentItems = time(getFrequentItemSets(set, support))
         println(frequentItems)
+        val rules = generateAssociationRules(frequentItems, confidence)
+        println(rules)
       }
       case Failure(e) => println(e.getMessage)
     }
@@ -31,16 +39,16 @@ object Apriori extends App {
       .toList
   }
 
-  def getFrequentItems(transaction: Transaction, minsup: Double): List[Item]  = {
+  def getFrequentItemSets(transaction: Transaction, minsup: Double): List[Item]  = {
     // Map singletons with frequency
     val frequencyMap = transaction.flatten.foldLeft(Map[String,Int]() withDefaultValue 0) {
       (m,x) => m + (x -> (1 + m(x)))
     }
+
     val transactionsNeeded = (transaction.size * minsup).toInt
-    println(transactionsNeeded)
 
     // Filter Singletons
-    val currentSet= frequencyMap.filter(item => item._2 >= transactionsNeeded).toList
+    val currentSet = frequencyMap.filter(item => item._2 >= transactionsNeeded).toList
     val items = currentSet.map(tuple => Item(Set(tuple._1), tuple._2))
     // List(Item(Set(5), support), Item(Set(..), support)
 
@@ -71,6 +79,23 @@ object Apriori extends App {
 
     result.flatten
       .toList
+  }
+
+  def generateAssociationRules(items: FrequentItemSets, conf: Double): List[AssociationRule] = {
+    // Just to have an easier way to access each sets support..
+    val map = items.map(item => (item.set -> item.support))
+      .toMap
+
+    val rules = items.map { item =>
+      val set = item.set
+      set.subsets().filter(x => (x.nonEmpty && x.size != set.size))
+        .map {subset =>
+          (subset, set diff subset, map(set).toDouble/map(subset).toDouble)
+        }.toList
+    }.flatten
+
+    // Return only those confidence higher than "conf"
+    rules.filter(rule => rule._3 >= conf)
   }
 
   def getSupport(set: ItemSet, transaction: Transaction): Int =
