@@ -5,7 +5,6 @@ import util.control.Breaks._
 
 
 object Apriori extends App {
-
   type ItemSet = Set[String]
   case class Item(set: ItemSet, support: Int)
   type Transaction = List[ItemSet]
@@ -16,23 +15,37 @@ object Apriori extends App {
   val dataTwo = "data/smaller.dat"
   val slides = "data/slidesexample.dat"
   val support = 0.4
-  val confidence = 0.7
+  val confidence = 0.75
 
   run(slides, support, confidence)
 
   def run(file: String, support: Double, confidence: Double): Unit = {
-    getItemSet(file) match {
+    getTransactions(file) match {
       case Success(set) => {
-        val frequentItems = time(getFrequentItemSets(set, support))
-        println(frequentItems)
-        val rules = generateAssociationRules(frequentItems, confidence)
-        println(rules)
+        time {
+          println("Running with support: " + support + ", and confidence: " + confidence)
+          val frequentItems = getFrequentItemSets(set, support)
+          println("Frequent ItemSets:\n" + frequentItems)
+          printRules(generateAssociationRules(frequentItems, confidence))
+        }
       }
       case Failure(e) => println(e.getMessage)
     }
   }
 
-  def getItemSet(file: String): Try[Transaction] = Try {
+  def printRules(rules: List[AssociationRule]): Unit = {
+    println("Association rules:")
+    rules.foreach {rule =>
+      print("( ")
+      rule._1.foreach(x => print(x + " "))
+      print(") ---> ( ")
+      rule._2.foreach(l => print(l + " "))
+      print(") = ")
+      print(rule._3 + "\n")
+    }
+  }
+
+  def getTransactions(file: String): Try[Transaction] = Try {
     Source.fromFile(file)
       .getLines()
       .map(_.split(" ").toSet)
@@ -83,7 +96,7 @@ object Apriori extends App {
 
   def generateAssociationRules(items: FrequentItemSets, conf: Double): List[AssociationRule] = {
     // Just to have an easier way to access each sets support..
-    val map = items.map(item => (item.set -> item.support))
+    val map = items.map(item => item.set -> item.support)
       .toMap
 
     val rules = items.map { item =>
